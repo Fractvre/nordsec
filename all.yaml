@@ -1,0 +1,237 @@
+---
+- name: "Configure nodes"
+  hosts: [all]
+  become: yes
+  gather_facts: no
+  vars:
+    packages:
+      - python
+      - build-essential
+      - libssl-dev
+      - keepalived
+  tasks:
+
+    - name: Install Packages
+      apt:
+        name: "{{ item }}"
+        state: latest
+      loop: "{{ packages }}"
+
+    - name: Update apt repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Upgrade all packages
+      apt: upgrade=dist force_apt_get=yes
+
+    - name: Copy binary to nodes
+      copy:
+        src: service
+        dest: /usr/local/bin
+        mode: u=rwx,g=rx,o=rx
+        owner: root
+        group: root
+
+- name: "Configure main"
+  hosts: main
+  become: true
+  gather_facts: no
+
+  tasks:
+
+    - name: Create user
+      user:
+        name: main
+        password: 'mainserver'
+        state: present
+        shell: /bin/bash
+        createhome: yes
+        home: /home/main
+
+    - name: Configure permissions
+      copy:
+        dest: "/etc/sudoers.d/main"
+        content: "main ALL=(ALL) NOPASSWD: ALL"
+
+    - name: Install Nginx
+      apt: name=nginx state=latest
+
+    - name: Start Nginx
+      service:
+          name: nginx
+          state: started
+
+    - name: copy Nginx site.conf
+      template:
+        src: reverse-proxy.conf.j2
+        dest: /etc/nginx/sites-available/reverse-proxy.conf
+
+    - name: Create symlink
+      file:
+        src: /etc/nginx/sites-available/reverse-proxy.conf
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+
+    - name: restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+- name: "Configure node1"
+  hosts: node1
+  become: yes
+  gather_facts: no
+  handlers:
+    - name: Start service
+      systemd:
+        name: service
+        state: started
+        enabled: yes
+  
+  tasks:
+
+    - name: Create user
+      user:
+        name: node1
+        password: 'node1server'
+        state: present
+        shell: /bin/bash
+        createhome: no
+
+    - name: copy keepalived Configrutaion
+      template:
+        src: keepalivedn1.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+
+    - name: restart keepalived
+      service:
+        name: keepalived
+        state: restarted
+
+    - name: create systemd unit file
+      blockinfile:
+        create: yes
+        path: /etc/systemd/system/service.service
+        block: |
+          [Unit]
+          Description=ping/pong service
+
+          [Service]
+          User=node1
+          ExecStart=/usr/local/bin/service
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+        state: present
+        mode: u=rwx,g=rx,o=rx
+        owner: root
+        group: root
+      notify:
+        - Start service
+
+- name: "Configure node2"
+  hosts: node2
+  gather_facts: no
+  become: yes
+  handlers:
+    - name: Start service
+      systemd:
+        name: service
+        state: started
+        enabled: yes
+  
+  tasks:
+
+    - name: Create user
+      user:
+        name: node2
+        password: 'node2server'
+        state: present
+        shell: /bin/bash
+        createhome: no
+
+    - name: copy keepalived Configrutaion
+      template:
+        src: keepalivedn2.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+
+    - name: restart keepalived
+      service:
+        name: keepalived
+        state: restarted
+
+    - name: create systemd unit file
+      blockinfile:
+        create: yes
+        path: /etc/systemd/system/service.service
+        block: |
+          [Unit]
+          Description=ping/pong service
+
+          [Service]
+          User=node2
+          ExecStart=/usr/local/bin/service
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+        state: present
+        mode: u=rwx,g=rx,o=rx
+        owner: root
+        group: root
+      notify:
+        - Start service
+
+- name: "Configure node3"
+  hosts: node3
+  become: yes
+  gather_facts: no
+  handlers:
+    - name: Start service
+      systemd:
+        name: service
+        state: started
+        enabled: yes
+  
+  tasks:
+
+    - name: Create user
+      user:
+        name: node3
+        password: 'node3server'
+        state: present
+        shell: /bin/bash
+        createhome: no
+
+    - name: copy keepalived Configrutaion
+      template:
+        src: keepalivedn3.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+
+    - name: restart keepalived
+      service:
+        name: keepalived
+        state: restarted
+
+    - name: create systemd unit file
+      blockinfile:
+        create: yes
+        path: /etc/systemd/system/service.service
+        block: |
+          [Unit]
+          Description=ping/pong service
+
+          [Service]
+          User=node3
+          ExecStart=/usr/local/bin/service
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+        state: present
+        mode: u=rwx,g=rx,o=rx
+        owner: root
+        group: root
+      notify:
+        - Start service
+...
